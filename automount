@@ -1,0 +1,77 @@
+#!/bin/bash
+
+#echo -e '\n\n\n\n\n\n\nNew event\n\n' >>/tmp/automount.log
+#export >>/tmp/automount.log
+
+LOG='/var/log/automount/common.log'
+ERRLOG='/var/log/automount/errors.log'
+
+# Tune iocharset option
+VFAT_OPTS='uid=root,gid=storage,umask=117,dmask=007,iocharset=cp1251,noatime,sync,dirsync'
+NTFS_OPTS='uid=root,gid=storage,umask=117,dmask=007,iocharset=cp1251,utf8=true,noatime,sync,dirsync'
+
+
+LOGPREFIX="$(date)# "
+
+function select_mount_point {
+    dev_path=$1
+    dev_name=$(basename $dev_path)
+
+    echo "/media/$dev_name"
+}
+
+function mount_ext {
+    act=$1
+    dev_path=$2
+    mnt_point=$3
+
+    if [ "x$act" = 'xadd' ]; then
+        mkdir $mnt_point && mount $dev_path $mnt_point
+    elif [ "x$act" = 'xremove' ]; then
+        umount $dev_path && rmdir $mnt_point
+    fi
+}
+
+function mount_vfat {
+    act=$1
+    dev_path=$2
+    mnt_point=$3
+
+    if [ "x$act" = 'xadd' ]; then
+        mkdir $mnt_point && mount -t vfat $dev_path $mnt_point -o $VFAT_OPTS
+    elif [ "x$act" = 'xremove' ]; then
+        umount $dev_path && rmdir $mnt_point
+    fi
+}
+
+function mount_ntfs {
+    act=$1
+    dev_path=$2
+    mnt_point=$3
+
+    if [ "x$act" = 'xadd' ]; then
+        mkdir $mnt_point && mount -t ntfs $dev_path $mnt_point -o $NTFS_OPTS
+    elif [ "x$act" = 'xremove' ]; then
+        umount $dev_path && rmdir $mnt_point
+    fi
+}
+
+[[ ! "x$DEVTYPE" = 'xpartition' ]] && [[ ! "x$ID_FS_USAGE" = 'xfilesystem' ]] && exit 1
+
+MOUNT_POINT=$(select_mount_point $DEVNAME)
+
+if [[ "x$ID_FS_TYPE" =~ ^xext(2|3)$ ]]; then
+    echo "$(LOGPREFIX)Ext partition updated, processing..." >>$LOG
+    mount_ext $ACTION $DEVNAME $MOUNT_POINT >>$LOG 2>>$ERRLOG
+fi
+
+if [[ "x$ID_FS_TYPE" = 'xvfat' ]]; then
+    echo "$(LOGPREFIX)FAT partition updated, processing..." >>$LOG
+    mount_vfat $ACTION $DEVNAME $MOUNT_POINT >>$LOG 2>>$ERRLOG
+fi
+
+if [[ "x$ID_FS_TYPE" = 'xntfs' ]]; then
+    echo "$(LOGPREFIX)NTFS partition updated, processing..." >>$LOG
+    mount_ntfs $ACTION $DEVNAME $MOUNT_POINT >>$LOG 2>>$ERRLOG
+fi
+

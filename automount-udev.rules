@@ -1,0 +1,2 @@
+ENV{ACTION}=="add", ENV{SUBSYSTEM}=="block", ENV{DEVTYPE}=="partition", RUN="/usr/sbin/automount"
+ENV{ACTION}=="remove", ENV{SUBSYSTEM}=="block", ENV{DEVTYPE}=="partition", RUN="/usr/sbin/automount"
