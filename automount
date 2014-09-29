@@ -1,12 +1,10 @@
 #!/bin/bash
 
-#echo -e '\n\n\n\n\n\n\nNew event\n\n' >>/tmp/automount.log
-#export >>/tmp/automount.log
-
 LOG='/var/log/automount/common.log'
 ERRLOG='/var/log/automount/errors.log'
 
 # Tune iocharset option
+EXT_OPTS='noatime,sync,dirsync,barrier=1,commit=1,data=ordered'
 VFAT_OPTS='uid=root,gid=storage,umask=117,dmask=007,iocharset=cp1251,noatime,sync,dirsync'
 NTFS_OPTS='uid=root,gid=storage,umask=117,dmask=007,iocharset=cp1251,utf8=true,noatime,sync,dirsync'
 
@@ -26,7 +24,7 @@ function mount_ext {
     mnt_point=$3
 
     if [ "x$act" = 'xadd' ]; then
-        mkdir $mnt_point && mount $dev_path $mnt_point
+        mkdir $mnt_point && ( mount $dev_path $mnt_point -o $EXT_OPTS || rmdir $mnt_point )
     elif [ "x$act" = 'xremove' ]; then
         umount $dev_path && rmdir $mnt_point
     fi
@@ -38,7 +36,8 @@ function mount_vfat {
     mnt_point=$3
 
     if [ "x$act" = 'xadd' ]; then
-        mkdir $mnt_point && mount -t vfat $dev_path $mnt_point -o $VFAT_OPTS
+        mkdir $mnt_point && ( mount -t vfat $dev_path $mnt_point -o $VFAT_OPTS ||
+	    rmdir $mnt_point )
     elif [ "x$act" = 'xremove' ]; then
         umount $dev_path && rmdir $mnt_point
     fi
@@ -50,28 +49,34 @@ function mount_ntfs {
     mnt_point=$3
 
     if [ "x$act" = 'xadd' ]; then
-        mkdir $mnt_point && mount -t ntfs $dev_path $mnt_point -o $NTFS_OPTS
+        mkdir $mnt_point && ( mount -t ntfs $dev_path $mnt_point -o $NTFS_OPTS ||
+	    rmdir $mnt_point )
     elif [ "x$act" = 'xremove' ]; then
         umount $dev_path && rmdir $mnt_point
     fi
 }
 
-[[ ! "x$DEVTYPE" = 'xpartition' ]] && [[ ! "x$ID_FS_USAGE" = 'xfilesystem' ]] && exit 1
+[[ ! "x$ID_FS_USAGE" = 'xfilesystem' ]] && exit 1
 
 MOUNT_POINT=$(select_mount_point $DEVNAME)
 
 if [[ "x$ID_FS_TYPE" =~ ^xext(2|3)$ ]]; then
     echo "$(LOGPREFIX)Ext partition updated, processing..." >>$LOG
     mount_ext $ACTION $DEVNAME $MOUNT_POINT >>$LOG 2>>$ERRLOG
+
+    return $?
 fi
 
 if [[ "x$ID_FS_TYPE" = 'xvfat' ]]; then
     echo "$(LOGPREFIX)FAT partition updated, processing..." >>$LOG
     mount_vfat $ACTION $DEVNAME $MOUNT_POINT >>$LOG 2>>$ERRLOG
+
+    return $?
 fi
 
 if [[ "x$ID_FS_TYPE" = 'xntfs' ]]; then
     echo "$(LOGPREFIX)NTFS partition updated, processing..." >>$LOG
     mount_ntfs $ACTION $DEVNAME $MOUNT_POINT >>$LOG 2>>$ERRLOG
-fi
 
+    return $?
+fi
